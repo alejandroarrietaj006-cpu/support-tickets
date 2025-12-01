@@ -1,6 +1,23 @@
+import json
+import os
 from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
+
+SAVE_FILE = "ubicacion.json"
+
+
+def guardar_ubicacion(data):
+    with open(SAVE_FILE, "w") as f:
+        json.dump(data, f)
+
+
+def leer_ubicacion():
+    if os.path.exists(SAVE_FILE):
+        with open(SAVE_FILE, "r") as f:
+            return json.load(f)
+    return None
+
 
 @app.route("/")
 def mapa():
@@ -15,10 +32,8 @@ def mapa():
             }
         </style>
 
-        <!-- OpenLayers -->
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v7.3.0/ol.css">
         <script src="https://cdn.jsdelivr.net/npm/ol@v7.3.0/dist/ol.js"></script>
-
     </head>
 
     <body>
@@ -26,19 +41,17 @@ def mapa():
         <div id="map"></div>
 
         <script>
-            // Capa Google Maps sin API key (modo "XYZ tiles")
             var googleLayer = new ol.layer.Tile({
                 source: new ol.source.XYZ({
-                    url: 'http://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}',
+                    url: 'http://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}'
                 })
             });
 
-            // Crear mapa
             var map = new ol.Map({
                 target: 'map',
                 layers: [googleLayer],
                 view: new ol.View({
-                    center: ol.proj.fromLonLat([-75.5812, 6.2442]), // Medellín
+                    center: ol.proj.fromLonLat([-75.5812, 6.2442]),
                     zoom: 13
                 })
             });
@@ -48,7 +61,6 @@ def mapa():
             });
             map.addLayer(markerLayer);
 
-            // Evento clic
             map.on('click', function(evt) {
                 var coord = ol.proj.toLonLat(evt.coordinate);
                 var lon = coord[0];
@@ -56,27 +68,22 @@ def mapa():
 
                 console.log("Coordenadas:", lat, lon);
 
-                // Borrar marcador anterior
                 markerLayer.getSource().clear();
 
-                // Crear marcador
                 var feature = new ol.Feature({
                     geometry: new ol.geom.Point(evt.coordinate)
                 });
-
                 markerLayer.getSource().addFeature(feature);
 
-                // Enviar coordenadas al backend
                 fetch("/selection", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ selected_value: { lat: lat, lng: lon } })
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({lat: lat, lng: lon})
                 })
                 .then(r => r.json())
-                .then(data => console.log("API:", data));
+                .then(data => console.log("Guardado:", data));
             });
         </script>
-
     </body>
     </html>
     """
@@ -84,13 +91,18 @@ def mapa():
     return render_template_string(html)
 
 
-
 @app.route("/selection", methods=["POST"])
 def capture_selection():
     data = request.json
-    selected = data.get("selected_value")
-    print("Coordenadas:", selected)
-    return jsonify({"status": "ok", "selected_value": selected})
+    guardar_ubicacion(data)
+    print("Ubicación guardada:", data)
+    return jsonify({"status": "ok", "saved": data})
+
+
+@app.route("/ultima_ubicacion", methods=["GET"])
+def ultima_ubicacion():
+    data = leer_ubicacion()
+    return jsonify({"ultima_ubicacion": data})
 
 
 if __name__ == "__main__":
