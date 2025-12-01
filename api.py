@@ -8,77 +8,69 @@ def mapa():
     <html>
     <head>
         <title>Seleccionar ubicación</title>
-
         <style>
-            body, html {
-                margin: 0; padding: 0; height: 100%;
-            }
-
-            #wrapper {
-                position: relative;
+            #map {
                 height: 500px;
-            }
-
-            #googlemap {
                 width: 100%;
-                height: 100%;
-                filter: brightness(100%);
-            }
-
-            /* Capa Leaflet invisible igual al tamaño del mapa */
-            #leaflet-overlay {
-                position: absolute;
-                top: 0; left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: auto;
             }
         </style>
 
-        <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-        <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+        <!-- OpenLayers -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v7.3.0/ol.css">
+        <script src="https://cdn.jsdelivr.net/npm/ol@v7.3.0/dist/ol.js"></script>
+
     </head>
 
     <body>
-        <h3>Haz clic sobre Google Maps para obtener la ubicación</h3>
-
-        <div id="wrapper">
-            <!-- Google Maps embed sin API key -->
-            <iframe id="googlemap"
-                src="https://maps.google.com/maps?q=Medellin&z=13&output=embed">
-            </iframe>
-
-            <!-- Leaflet overlay -->
-            <div id="leaflet-overlay"></div>
-        </div>
+        <h3>Haz clic en el mapa para seleccionar una ubicación</h3>
+        <div id="map"></div>
 
         <script>
-            // Crear mapa Leaflet invisible encima
-            var map = L.map('leaflet-overlay', {
-                zoomControl: false,
-                attributionControl: false
-            }).setView([6.2442, -75.5812], 13);
+            // Capa Google Maps sin API key (modo "XYZ tiles")
+            var googleLayer = new ol.layer.Tile({
+                source: new ol.source.XYZ({
+                    url: 'http://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}',
+                })
+            });
 
-            // Capa en blanco (solo para poder usar Leaflet)
-            L.tileLayer('', {}).addTo(map);
+            // Crear mapa
+            var map = new ol.Map({
+                target: 'map',
+                layers: [googleLayer],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([-75.5812, 6.2442]), // Medellín
+                    zoom: 13
+                })
+            });
 
-            var marker;
+            var markerLayer = new ol.layer.Vector({
+                source: new ol.source.Vector()
+            });
+            map.addLayer(markerLayer);
 
-            map.on("click", function(e) {
-                var lat = e.latlng.lat;
-                var lng = e.latlng.lng;
+            // Evento clic
+            map.on('click', function(evt) {
+                var coord = ol.proj.toLonLat(evt.coordinate);
+                var lon = coord[0];
+                var lat = coord[1];
 
-                console.log("Coordenadas:", lat, lng);
+                console.log("Coordenadas:", lat, lon);
 
-                if (marker) map.removeLayer(marker);
-                marker = L.marker([lat, lng]).addTo(map);
+                // Borrar marcador anterior
+                markerLayer.getSource().clear();
 
-                fetch('/selection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        selected_value: { lat: lat, lng: lng }
-                    })
+                // Crear marcador
+                var feature = new ol.Feature({
+                    geometry: new ol.geom.Point(evt.coordinate)
+                });
+
+                markerLayer.getSource().addFeature(feature);
+
+                // Enviar coordenadas al backend
+                fetch("/selection", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ selected_value: { lat: lat, lng: lon } })
                 })
                 .then(r => r.json())
                 .then(data => console.log("API:", data));
@@ -91,13 +83,15 @@ def mapa():
 
     return render_template_string(html)
 
-@app.route('/selection', methods=['POST'])
+
+
+@app.route("/selection", methods=["POST"])
 def capture_selection():
     data = request.json
-    selected_value = data.get("selected_value")
-    print("Coordenadas:", selected_value)
-    return jsonify({"status": "ok", "selected_value": selected_value})
+    selected = data.get("selected_value")
+    print("Coordenadas:", selected)
+    return jsonify({"status": "ok", "selected_value": selected})
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
 
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
