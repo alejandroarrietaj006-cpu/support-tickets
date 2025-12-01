@@ -6,7 +6,7 @@ app = Flask(__name__)
 # Endpoint para devolver la URL del mapa
 @app.route('/map-url', methods=['GET'])
 def get_map_url():
-    return jsonify({"map_url": "https://tu-mapa.com"})  # Aquí luego pondremos tu HTML con Leaflet
+    return jsonify({"map_url": "https://www.google.com/maps"})  # A
 
 # Endpoint para recibir la selección del usuario
 @app.route('/selection', methods=['POST'])
@@ -17,3 +17,4 @@ def capture_selection():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+
